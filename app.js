@@ -3,8 +3,12 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
 const app = express();
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
+// const md5 = require("md5");
+// const encrypt = require('mongoose-encryption');
+
 
 mongoose.connect('mongodb://localhost:27017/test');
 
@@ -19,7 +23,7 @@ const userSchema = new Schema({
     password: String
      });
 
-userSchema.plugin(encrypt, {  secret: process.env.SECRET, encryptedFields: ["password"]});
+// userSchema.plugin(encrypt, {  secret: process.env.SECRET, encryptedFields: ["password"]});
 
 const User = mongoose.model("User", userSchema);
 
@@ -42,13 +46,21 @@ app.post("/register", (req, res) =>{
             console.log("It is already in the Database ooo.");
             res.redirect("/login");
         }else{
-            const user1 = new User({
-                username: req.body.username,
-                password: req.body.password
+            const name= req.body.username;
+            const pass = req.body.password;
+            bcrypt.genSalt(saltRounds, function(err, salt) {
+                bcrypt.hash(pass, salt, function(err, hash) {
+                    // Store hash in your password DB.
+                    const user1 = new User({
+                        username: name,
+                        password: hash
+                    });
+                    user1.save((err) =>{
+                       res.render("secrets");
+                    });
+                });
             });
-            user1.save((err) =>{
-               res.render("secrets");
-            });
+            
         }
     });
 
@@ -58,14 +70,17 @@ app.post("/register", (req, res) =>{
 app.post("/login", (req, res) =>{
     User.findOne({username: req.body.username}, (err, docs) =>{
         if(docs){
-            if(req.body.password===docs.password){
-                res.render("secrets");
-            }else{
-              res.redirect("/login");
-            }
+            bcrypt.compare(req.body.password, docs.password, function(err, result) {
+                // result == true
+                if(result){
+                    res.render("secrets");
+                }else{
+                    res.redirect("/login");
+                }
+            });
            
         }else{
-            res.redirect("/");
+            res.redirect("/register");
         }
     });   
 });
